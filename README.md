@@ -6,14 +6,14 @@ Telegram бот для английских Reels: локальное распо
 
 ## Запуск
 
-Требуются Python 3.9+, `ffmpeg`, запущенный [Ollama](https://ollama.com/) с Qwen и токен Telegram бота. Для озвучки дополнительно нужен `piper` и русская модель Piper. Первое распознавание может загрузить модель Whisper.
+Рекомендуется Python 3.12, `ffmpeg`, запущенный [Ollama](https://ollama.com/) с Qwen и токен Telegram бота. Для озвучки дополнительно нужен `piper` и русская модель Piper. Первое распознавание может загрузить модель Whisper. Python 3.9 больше не поддерживается актуальным yt-dlp.
 
 ```sh
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+python3.12 -m venv .venv312
+.venv312/bin/python -m pip install -U -r requirements.txt
 ollama pull qwen3:8b
 export TELEGRAM_BOT_TOKEN='...'
-.venv/bin/python bot.py
+.venv312/bin/python bot.py
 ```
 
 Настройки через переменные окружения:
@@ -28,16 +28,27 @@ export TELEGRAM_BOT_TOKEN='...'
 | `VIDEO_TTL_SECONDS` | `604800` | Время хранения видео и диалогов |
 | `QA_HISTORY_MESSAGES` | `8` | Число последних сообщений в контексте видео |
 | `BOT_WORKERS` | `4` | Одновременно обрабатываемые чаты |
+| `YTDLP_COOKIES_FROM_BROWSER` | нет | Браузер с активным входом в Instagram, например `chrome`, `safari` или `firefox` |
+| `YTDLP_COOKIES_FILE` | нет | Альтернативный путь к файлу cookies в формате Netscape |
 
 Отправьте боту ссылку на Reel или видеофайл. `/videos` показывает доступные видео, `/video <ID>` возвращает к нужному видео, `/cancel` завершает режим вопросов. Кнопка **Задать вопрос** включает режим свободных вопросов для выбранного видео. Каждое видео имеет отдельный ID, историю и время истечения.
+
+Если Instagram отвечает «login required» или «rate-limit reached», войдите в Instagram в браузере и перезапустите бот с `YTDLP_COOKIES_FROM_BROWSER`:
+
+```sh
+export YTDLP_COOKIES_FROM_BROWSER=chrome
+.venv312/bin/python bot.py
+```
+
+Укажите тот браузер, в котором уже открыт Instagram. Можно вместо этого задать `YTDLP_COOKIES_FILE` с приватным файлом cookies вне репозитория. Файл `.env` не загружается автоматически: если используете его, выполните `set -a; source .env; set +a` перед запуском. Cookies не отправляются в Telegram. Если у аккаунта нет доступа к конкретному Reel или лимит Instagram остаётся, отправьте видеофайл боту напрямую.
 
 Текст видео считается недоверенными данными. Ответы и временные отметки формируются из сохранённых фрагментов; если модель не находит подтверждения, бот сообщает, что сведений в видео нет. Содержимое SQLite и медиафайлы удаляются после истечения срока хранения.
 
 ## Проверка
 
 ```sh
-python3 -m unittest discover -v
-REELRUS_LIVE_OLLAMA=1 python3 -m unittest tests.test_ollama_integration -v
+.venv312/bin/python -m unittest discover -v
+REELRUS_LIVE_OLLAMA=1 .venv312/bin/python -m unittest tests.test_ollama_integration -v
 ```
 
 Первый набор полностью использует моки. Второй обращается к локально запущенному Ollama и установленной модели Qwen.

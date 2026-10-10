@@ -3,13 +3,14 @@
 import logging
 import os
 import re
+import sys
 import threading
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from services.conversation_manager import ConversationManager
-from services.media import MediaService
+from services.media import MediaService, VideoDownloadUnavailable
 from services.ollama_client import OllamaClient
 from services.storage import VideoStore
 from services.summarization import SummarizationService
@@ -63,6 +64,9 @@ class ReelRusBot:
                     self._on_callback(user_id, chat_id, callback)
                 else:
                     self._on_message(user_id, chat_id, message)
+            except VideoDownloadUnavailable as exc:
+                LOG.warning("Video download unavailable for chat %s: %s", chat_id, exc)
+                self.api.send_message(chat_id, str(exc))
             except Exception as exc:
                 LOG.exception("Update failed for chat %s", chat_id)
                 reason = str(exc) if isinstance(exc, ValueError) else "Попробуйте позже."
@@ -197,6 +201,8 @@ class ReelRusBot:
 
 def main():
     logging.basicConfig(level=logging.INFO)
+    if sys.version_info < (3, 10):
+        raise SystemExit("ReelRus requires Python 3.10+; use a Python 3.12 virtual environment.")
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         raise SystemExit("Set TELEGRAM_BOT_TOKEN")
@@ -208,7 +214,9 @@ def main():
     conversations = ConversationManager(store, int(os.environ.get("QA_HISTORY_MESSAGES", 8)))
     media = MediaService(data_dir / "jobs", client,
                          os.environ.get("WHISPER_MODEL", "small"),
-                         os.environ.get("PIPER_MODEL"))
+                         os.environ.get("PIPER_MODEL"),
+                         os.environ.get("YTDLP_COOKIES_FROM_BROWSER"),
+                         os.environ.get("YTDLP_COOKIES_FILE"))
     api = TelegramAPI(token)
     bot = ReelRusBot(api, store, media,
                      SummarizationService(store, client, conversations),

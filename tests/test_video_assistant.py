@@ -5,6 +5,7 @@ from pathlib import Path
 
 from bot import QUESTION_PROMPT, ReelRusBot, menu
 from services.conversation_manager import ConversationManager
+from services.media import VideoDownloadUnavailable
 from services.storage import VideoStore
 from services.summarization import SummarizationService
 from services.video_qa import VideoQAService
@@ -193,6 +194,21 @@ class AssistantTests(unittest.TestCase):
         self.assertEqual(1, media.translations)
         bot._translation(1, 10, video_id)
         self.assertEqual(1, media.translations)
+
+    def test_bot_reports_instagram_login_failure_without_traceback(self):
+        class BlockedMedia(FakeMedia):
+            def download(self, video_id, url=None, telegram_file_url=None):
+                raise VideoDownloadUnavailable("Настройте YTDLP_COOKIES_FROM_BROWSER.")
+
+        api = FakeAPI()
+        client = FakeClient()
+        bot = ReelRusBot(api, self.store, BlockedMedia(),
+                         SummarizationService(self.store, client, self.history),
+                         VideoQAService(self.store, client, self.history), self.history)
+        bot.handle_update({"message": {"from": {"id": 1}, "chat": {"id": 10},
+                                       "text": "https://www.instagram.com/reel/example/"}})
+        self.assertEqual("Настройте YTDLP_COOKIES_FROM_BROWSER.", api.messages[-1][1])
+        self.assertEqual([], self.store.list_videos(1, 10))
 
 
 if __name__ == "__main__":
