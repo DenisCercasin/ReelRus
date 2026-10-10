@@ -8,6 +8,8 @@ Telegram бот для английских Reels: локальное распо
 
 Рекомендуется Python 3.12, `ffmpeg`, запущенный [Ollama](https://ollama.com/) с Qwen и токен Telegram бота. Для озвучки дополнительно нужен `piper` и русская модель Piper. Первое распознавание может загрузить модель Whisper. Python 3.9 больше не поддерживается актуальным yt-dlp.
 
+После изменения `requirements.txt` повторно выполните `.venv312/bin/python -m pip install -U -r requirements.txt` и перезапустите бот. Версия PyAV ограничена ниже 19 для совместимости с текущим выпуском faster-whisper.
+
 ```sh
 python3.12 -m venv .venv312
 .venv312/bin/python -m pip install -U -r requirements.txt

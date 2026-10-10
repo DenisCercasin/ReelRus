@@ -5,9 +5,12 @@ import os
 import re
 import sys
 import threading
+import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
+from http.client import RemoteDisconnected
 from pathlib import Path
+from urllib.error import URLError
 
 from services.conversation_manager import ConversationManager
 from services.media import MediaService, VideoDownloadUnavailable
@@ -29,6 +32,28 @@ def menu(video_id):
              ("🎙 Русская озвучка", "dub")]
     return {"inline_keyboard": [[{"text": label, "callback_data": action + ":" + video_id}]
                                 for label, action in items]}
+
+
+def poll_updates(api, on_update, prune, sleep=time.sleep):
+    """Long-poll Telegram with bounded delay after transient connection failures."""
+    offset = None
+    backoff = 1
+    while True:
+        try:
+            prune()
+            for update in api.get_updates(offset=offset):
+                offset = update["update_id"] + 1
+                on_update(update)
+            backoff = 1
+        except (URLError, RemoteDisconnected, TimeoutError, ConnectionResetError) as exc:
+            LOG.warning("Telegram polling connection lost (%s); retrying in %ss",
+                        type(exc).__name__, backoff)
+            sleep(backoff)
+            backoff = min(backoff * 2, 30)
+        except Exception:
+            LOG.exception("Telegram polling failed; retrying in %ss", backoff)
+            sleep(backoff)
+            backoff = min(backoff * 2, 30)
 
 
 class ReelRusBot:
@@ -200,7 +225,8 @@ class ReelRusBot:
 
 
 def main():
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.WARNING)
+    LOG.setLevel(logging.INFO)
     if sys.version_info < (3, 10):
         raise SystemExit("ReelRus requires Python 3.10+; use a Python 3.12 virtual environment.")
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -221,7 +247,6 @@ def main():
     bot = ReelRusBot(api, store, media,
                      SummarizationService(store, client, conversations),
                      VideoQAService(store, client, conversations), conversations)
-    offset = None
     queues = {}
     running = set()
     queue_lock = threading.Lock()
@@ -253,17 +278,14 @@ def main():
                 pool.submit(drain, key)
 
     with ThreadPoolExecutor(max_workers=int(os.environ.get("BOT_WORKERS", 4))) as pool:
-        while True:
-            try:
-                for expired_id in store.prune_expired():
-                    media.delete_job(expired_id)
-                for update in api.get_updates(offset=offset):
-                    offset = update["update_id"] + 1
-                    submit_ordered(pool, update)
-            except KeyboardInterrupt:
-                break
-            except Exception:
-                LOG.exception("Polling failed")
+        def prune():
+            for expired_id in store.prune_expired():
+                media.delete_job(expired_id)
+
+        try:
+            poll_updates(api, lambda update: submit_ordered(pool, update), prune)
+        except KeyboardInterrupt:
+            pass
 
 
 if __name__ == "__main__":
