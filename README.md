@@ -1,14 +1,14 @@
 # ReelRus
 
-Telegram бот для английских Reels: локальное распознавание речи, перевод и ответы на вопросы по видео на русском языке.
+A Telegram bot for English-language Reels. It transcribes speech locally, translates it into Russian, and answers questions about the video in Russian.
 
-После распознавания бот сразу показывает кнопки **Краткое содержание**, **Задать вопрос**, **Перевод текстом**, **Русские субтитры**, **Русская озвучка**. Вопросы, уточнения и краткое содержание работают по сохранённой расшифровке: повторной загрузки и распознавания видео нет.
+After transcription, the bot offers a summary, questions, text translation, Russian subtitles, and Russian voiceover through its buttons. Questions, follow-ups, and summaries use the saved transcript, so the video does not need to be downloaded or transcribed again.
 
-## Запуск
+## Setup
 
-Рекомендуется Python 3.12, `ffmpeg`, запущенный [Ollama](https://ollama.com/) с Qwen и токен Telegram бота. Для озвучки дополнительно нужен `piper` и русская модель Piper. Первое распознавание может загрузить модель Whisper. Python 3.9 больше не поддерживается актуальным yt-dlp.
+Use Python 3.12, `ffmpeg`, a running [Ollama](https://ollama.com/) instance with Qwen, and a Telegram bot token. Voiceover also requires `piper` and a Russian Piper model. The first transcription may download a Whisper model. Current versions of yt-dlp no longer support Python 3.9.
 
-После изменения `requirements.txt` повторно выполните `.venv312/bin/python -m pip install -U -r requirements.txt` и перезапустите бот. Версия PyAV ограничена ниже 19 для совместимости с текущим выпуском faster-whisper.
+After changing `requirements.txt`, run `.venv312/bin/python -m pip install -U -r requirements.txt` again and restart the bot. PyAV is pinned below version 19 for compatibility with the current faster-whisper release.
 
 ```sh
 python3.12 -m venv .venv312
@@ -18,39 +18,39 @@ export TELEGRAM_BOT_TOKEN='...'
 .venv312/bin/python bot.py
 ```
 
-Настройки через переменные окружения:
+Environment variables:
 
-| Переменная | По умолчанию | Назначение |
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `OLLAMA_URL` | `http://127.0.0.1:11434` | Локальный сервер Ollama |
-| `OLLAMA_MODEL` | `qwen3:8b` | Модель Qwen |
-| `WHISPER_MODEL` | `small` | Модель faster-whisper |
-| `PIPER_MODEL` | нет | Путь к русской модели Piper для озвучки |
-| `REELRUS_DATA_DIR` | `data` | SQLite и рабочие файлы видео |
-| `VIDEO_TTL_SECONDS` | `604800` | Время хранения видео и диалогов |
-| `QA_HISTORY_MESSAGES` | `8` | Число последних сообщений в контексте видео |
-| `BOT_WORKERS` | `4` | Одновременно обрабатываемые чаты |
-| `YTDLP_COOKIES_FROM_BROWSER` | нет | Браузер с активным входом в Instagram, например `chrome`, `safari` или `firefox` |
-| `YTDLP_COOKIES_FILE` | нет | Альтернативный путь к файлу cookies в формате Netscape |
+| `OLLAMA_URL` | `http://127.0.0.1:11434` | Local Ollama server |
+| `OLLAMA_MODEL` | `qwen3:8b` | Qwen model |
+| `WHISPER_MODEL` | `small` | faster-whisper model |
+| `PIPER_MODEL` | None | Path to the Russian Piper model for voiceover |
+| `REELRUS_DATA_DIR` | `data` | SQLite database and video working files |
+| `VIDEO_TTL_SECONDS` | `604800` | How long videos and conversations are kept |
+| `QA_HISTORY_MESSAGES` | `8` | Number of recent messages in the video context |
+| `BOT_WORKERS` | `4` | Number of chats processed concurrently |
+| `YTDLP_COOKIES_FROM_BROWSER` | None | Browser with an active Instagram login, such as `chrome`, `safari`, or `firefox` |
+| `YTDLP_COOKIES_FILE` | None | Alternative path to a Netscape-format cookies file |
 
-Отправьте боту ссылку на Reel или видеофайл. `/videos` показывает доступные видео, `/video <ID>` возвращает к нужному видео, `/cancel` завершает режим вопросов. Кнопка **Задать вопрос** включает режим свободных вопросов для выбранного видео. Каждое видео имеет отдельный ID, историю и время истечения.
+Send the bot a Reel link or a video file. `/videos` lists available videos, `/video <ID>` returns to a video, and `/cancel` exits question mode. The question button enables free-form questions about the selected video. Each video has its own ID, conversation history, and expiration time.
 
-Если Instagram отвечает «login required» или «rate-limit reached», войдите в Instagram в браузере и перезапустите бот с `YTDLP_COOKIES_FROM_BROWSER`:
+If Instagram responds with “login required” or “rate-limit reached,” sign in to Instagram in your browser and restart the bot with `YTDLP_COOKIES_FROM_BROWSER`:
 
 ```sh
 export YTDLP_COOKIES_FROM_BROWSER=chrome
 .venv312/bin/python bot.py
 ```
 
-Укажите тот браузер, в котором уже открыт Instagram. Можно вместо этого задать `YTDLP_COOKIES_FILE` с приватным файлом cookies вне репозитория. Файл `.env` не загружается автоматически: если используете его, выполните `set -a; source .env; set +a` перед запуском. Cookies не отправляются в Telegram. Если у аккаунта нет доступа к конкретному Reel или лимит Instagram остаётся, отправьте видеофайл боту напрямую.
+Use the browser where you are already signed in to Instagram. Alternatively, set `YTDLP_COOKIES_FILE` to a private cookies file outside the repository. The bot does not load `.env` automatically; if you use one, run `set -a; source .env; set +a` before starting it. Cookies are not sent to Telegram. If your account cannot access a particular Reel or Instagram continues to limit requests, send the video file directly to the bot.
 
-Текст видео считается недоверенными данными. Ответы и временные отметки формируются из сохранённых фрагментов; если модель не находит подтверждения, бот сообщает, что сведений в видео нет. Содержимое SQLite и медиафайлы удаляются после истечения срока хранения.
+Video text is treated as untrusted data. Answers and timestamps are based on saved transcript segments. If the model cannot find supporting information, the bot says that the video does not contain it. SQLite data and media files are deleted after their retention period expires.
 
-## Проверка
+## Tests
 
 ```sh
 .venv312/bin/python -m unittest discover -v
 REELRUS_LIVE_OLLAMA=1 .venv312/bin/python -m unittest tests.test_ollama_integration -v
 ```
 
-Первый набор полностью использует моки. Второй обращается к локально запущенному Ollama и установленной модели Qwen.
+The first command uses mocks throughout. The second connects to a running local Ollama instance with the Qwen model installed.
