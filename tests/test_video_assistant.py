@@ -5,7 +5,7 @@ from pathlib import Path
 
 from bot import QUESTION_PROMPT, ReelRusBot, menu
 from services.conversation_manager import ConversationManager
-from services.media import VideoDownloadUnavailable
+from services.media import MediaService, VideoDownloadUnavailable
 from services.storage import VideoStore
 from services.summarization import SummarizationService
 from services.video_qa import VideoQAService
@@ -194,6 +194,35 @@ class AssistantTests(unittest.TestCase):
         self.assertEqual(1, media.translations)
         bot._translation(1, 10, video_id)
         self.assertEqual(1, media.translations)
+
+    def test_translation_callback_recovers_from_missing_batch_entry(self):
+        segments = [{"start": i, "end": i + 1, "text": str(i)} for i in range(3)]
+        video_id = self.video(segments=segments)
+        client = FakeClient(
+            json.dumps({"translations": ["ноль", "два"]}),
+            json.dumps({"translations": ["ноль"]}),
+            json.dumps({"translations": ["один", "два"]}),
+        )
+        api = FakeAPI()
+        bot = ReelRusBot(api, self.store, MediaService(Path(self.tmp.name) / "jobs", client),
+                         SummarizationService(self.store, client, self.history),
+                         VideoQAService(self.store, client, self.history), self.history)
+        callback = {"callback_query": {"id": "translation", "from": {"id": 1},
+                    "message": {"chat": {"id": 10}},
+                    "data": "translation:" + video_id}}
+        bot.handle_update(callback)
+        self.assertEqual("ноль\nодин\nдва", api.messages[-1][1])
+        self.assertEqual(["ноль", "один", "два"],
+                         self.store.get_video(video_id, 1, 10)["metadata"]["translated_segments"])
+        bot.handle_update(callback)
+        self.assertEqual(3, len(client.calls))
+
+    def test_translation_uses_plain_text_for_invalid_single_segment_response(self):
+        client = FakeClient('{"translations": []}', "Добавьте сахар.")
+        media = MediaService(Path(self.tmp.name) / "jobs", client)
+        result = media.translate_segments([{"text": "Add sugar."}])
+        self.assertEqual(["Добавьте сахар."], result)
+        self.assertEqual([True, False], [call[1] for call in client.calls])
 
     def test_bot_reports_instagram_login_failure_without_traceback(self):
         class BlockedMedia(FakeMedia):
